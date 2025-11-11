@@ -6,6 +6,7 @@ platforms = ["osx-arm64"]
 version = "0.1.0"
 
 [tasks]
+fastapi = "fastapi dev backend/api.py"
 
 [dependencies]
 fastapi = ">=0.121.1,<0.122"

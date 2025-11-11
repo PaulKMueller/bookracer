@@ -8,6 +8,7 @@ import os
 DB_PATH = "highlights.db"
 PROFILE_DIR = os.path.expanduser("~/.bookracer_playwright")  # persistent profile
 
+# --- Database setup ---
 def ensure_db():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -36,60 +37,69 @@ def save_highlight(book_title, highlight, meta):
     finally:
         conn.close()
 
-def parse_notebook_html(html):
+# --- Parsing logic ---
+def parse_notebook_html(html, book_title):
     soup = BeautifulSoup(html, "html.parser")
-
-    # Highlights are <span id="highlight"> — non-unique IDs, so use find_all
     entries = soup.find_all("span", id="highlight")
-    print(f"Found {len(entries)} highlights")
-
     results = []
     for e in entries:
-        # Extract highlight text
-        highlight_text = e.get_text(strip=True)
-
-        # Find nearest book title above (if available)
-        # Titles are often in <h3> or <div> near highlights
-        book_title_el = e.find_previous(["h2", "h3", "div"], class_=lambda c: c and "book" in c.lower())
-        title = book_title_el.get_text(strip=True) if book_title_el else "Unknown"
-
-        # Optional: metadata (location, date, etc.)
-        meta_el = e.find_next("div", class_=lambda c: c and "metadata" in c.lower())
+        text = e.get_text(strip=True)
+        # Find metadata (location, date, etc.)
+        meta_el = e.find_previous("div", class_=lambda c: c and "highlight" in c.lower())
         meta = meta_el.get_text(strip=True) if meta_el else ""
-
-        results.append((title, highlight_text, meta))
-
+        results.append((book_title, text, meta))
     return results
 
+
+# --- Main scraping logic ---
 def main():
     ensure_db()
     with sync_playwright() as p:
         browser = p.chromium.launch_persistent_context(user_data_dir=PROFILE_DIR, headless=False)
         page = browser.new_page()
 
-        # Navigate to the notebook page — the user may be redirected to login.
+        print("Opening Kindle Notebook...")
         page.goto("https://read.amazon.com/notebook", wait_until="networkidle")
 
-        # Check if login is needed: look for common element only visible after login
+        # Check if login is needed
         if "Sign in" in page.title() or "Sign in" in page.content():
             print("Please sign in in the opened browser window. Waiting for you...")
-            # Wait for the user to complete login and be redirected
-            # You can wait until a known element on the notebook page exists
-            page.wait_for_selector("span.highlight", timeout=0)  # wait indefinitely
+            page.wait_for_selector("span#highlight", timeout=0)  # wait indefinitely
         else:
             print("Already logged in — fetching highlights...")
 
-        time.sleep(1)  # safety delay for dynamic content
-        html = page.content()
+        # Wait until sidebar with books loads
+        page.wait_for_selector("div.kp-notebook-library-each-book, div.a-row.a-spacing-none")
+        time.sleep(1)
 
-        highlights = parse_notebook_html(html)
-        print(f"Found {len(highlights)} highlights (parsed) — saving to DB...")
-        for title, hl_text, meta in highlights:
-            save_highlight(title, hl_text, meta)
+        # Find all clickable books
+        book_elements = page.query_selector_all("div.kp-notebook-library-each-book, div.a-row.a-spacing-none")
+        print(f"Found {len(book_elements)} books in sidebar.")
 
-        print("Saved highlights. Close the browser when you are done.")
-        # Keep browser open if you want; otherwise:
+        for i, book in enumerate(book_elements):
+            try:
+                title = book.inner_text().split("\n")[0].strip()
+                print(f"\n📖 Scraping book {i+1}/{len(book_elements)}: {title}")
+
+                # Click the book to load highlights
+                book.click()
+                page.wait_for_selector("span#highlight", timeout=10000)
+                time.sleep(2)
+
+                # Extract and parse HTML
+                html = page.content()
+                highlights = parse_notebook_html(html, title)
+                print(f"  → Found {len(highlights)} highlights")
+
+                for _, hl_text, meta in highlights:
+                    save_highlight(title, hl_text, meta)
+
+            except Exception as e:
+                print(f"⚠️ Error scraping {title}: {e}")
+
+        print("\n✅ Done. All highlights saved.")
         browser.close()
+
 
 if __name__ == "__main__":
     main()
