@@ -1,12 +1,14 @@
 # kindle_scrape.py
-from playwright.sync_api import sync_playwright
-from bs4 import BeautifulSoup
+import os
 import sqlite3
 import time
-import os
+
+from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
 
 DB_PATH = "highlights.db"
 PROFILE_DIR = os.path.expanduser("~/.bookracer_playwright")  # persistent profile
+
 
 # --- Database setup ---
 def ensure_db():
@@ -25,17 +27,19 @@ def ensure_db():
     conn.commit()
     conn.close()
 
+
 def save_highlight(book_title, highlight, meta):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     try:
         cur.execute(
             "INSERT OR IGNORE INTO highlights (book_title, highlight, meta) VALUES (?, ?, ?)",
-            (book_title, highlight, meta)
+            (book_title, highlight, meta),
         )
         conn.commit()
     finally:
         conn.close()
+
 
 # --- Parsing logic ---
 def parse_notebook_html(html, book_title):
@@ -45,7 +49,9 @@ def parse_notebook_html(html, book_title):
     for e in entries:
         text = e.get_text(strip=True)
         # Find metadata (location, date, etc.)
-        meta_el = e.find_previous("div", class_=lambda c: c and "highlight" in c.lower())
+        meta_el = e.find_previous(
+            "div", class_=lambda c: c and "highlight" in c.lower()
+        )
         meta = meta_el.get_text(strip=True) if meta_el else ""
         results.append((book_title, text, meta))
     return results
@@ -55,7 +61,9 @@ def parse_notebook_html(html, book_title):
 def main():
     ensure_db()
     with sync_playwright() as p:
-        browser = p.chromium.launch_persistent_context(user_data_dir=PROFILE_DIR, headless=False)
+        browser = p.chromium.launch_persistent_context(
+            user_data_dir=PROFILE_DIR, headless=False
+        )
         page = browser.new_page()
 
         print("Opening Kindle Notebook...")
@@ -69,17 +77,21 @@ def main():
             print("Already logged in — fetching highlights...")
 
         # Wait until sidebar with books loads
-        page.wait_for_selector("div.kp-notebook-library-each-book, div.a-row.a-spacing-none")
+        page.wait_for_selector(
+            "div.kp-notebook-library-each-book, div.a-row.a-spacing-none"
+        )
         time.sleep(1)
 
         # Find all clickable books
-        book_elements = page.query_selector_all("div.kp-notebook-library-each-book, div.a-row.a-spacing-none")
+        book_elements = page.query_selector_all(
+            "div.kp-notebook-library-each-book, div.a-row.a-spacing-none"
+        )
         print(f"Found {len(book_elements)} books in sidebar.")
 
         for i, book in enumerate(book_elements):
             try:
                 title = book.inner_text().split("\n")[0].strip()
-                print(f"\n📖 Scraping book {i+1}/{len(book_elements)}: {title}")
+                print(f"\n📖 Scraping book {i + 1}/{len(book_elements)}: {title}")
 
                 # Click the book to load highlights
                 book.click()

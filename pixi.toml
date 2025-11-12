@@ -5,12 +5,22 @@ name = "bookracer"
 platforms = ["osx-arm64"]
 version = "0.1.0"
 
+[feature.lint.tasks]
+pci = "pre-commit install"
+pc = "pre-commit run --all"
+
 [tasks]
 fastapi = "fastapi dev backend/api.py"
 bookracer = "fastapi dev backend/api.py && cd frontend && npm run dev"
 
+[feature.lint.dependencies]
+pre-commit = ">=4.3.0,<5"
 [dependencies]
 fastapi = ">=0.121.1,<0.122"
 requests = ">=2.32.5,<3"
 bs4 = ">=4.14.2,<5"
 pytest-playwright = ">=0.7.1,<0.8"
+
+[environments]
+lint = ["lint"]
+default = ["default"]
