@@ -1,13 +1,6 @@
 import React, { useEffect, useState } from "react";
 import "./App.css";
 
-function checkAndRemoveTypedText(fullText: string, typedText: string) {
-  if (fullText.startsWith(typedText)) {
-    return fullText.slice(typedText.length).trimStart();
-  }
-  return fullText;
-}
-
 async function fetchQuote(setters: {
   setQuote: Function;
   setBookTitle: Function;
@@ -48,9 +41,6 @@ async function fetchQuote(setters: {
 }
 
 function checkTypedText(fullText: string, typedText: string) {
-  // Return the number of correct words typed, the correctly typed text, the wrongly typed text and the remaining text.
-  // All text that comes after a mistake is considered wrong.
-
   let correctText = "";
   let wrongText = "";
 
@@ -92,6 +82,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [time, setTime] = useState(0);
+  const [wpm, setWpm] = useState(0);
 
   useEffect(() => {
     fetchQuote({
@@ -120,14 +111,13 @@ function App() {
     };
   }, [isRunning]);
 
-  const seconds = Math.floor(time / 100);
-  const startAndStop = () => {
-    setIsRunning(!isRunning);
-  };
-
-  const reset = () => {
+  useEffect(() => {
+    if (!quote) return;
     setTime(0);
-  };
+    setIsRunning(true);
+  }, [quote]);
+
+  const seconds = Math.floor(time / 100);
 
   return (
     <main style={{ textAlign: "center", padding: "2rem" }}>
@@ -140,18 +130,14 @@ function App() {
         <span>{remainingText}</span>
       </p>
 
-      <div className="stopwatch-container">
-        <p className="stopwatch-time">{seconds.toString().padStart(2, "0")}:</p>
-        <div className="stopwatch-buttons">
-          <button className="stopwatch-button" onClick={startAndStop}>
-            {isRunning ? "Stop" : "Start"}
-          </button>
-          <button className="stopwatch-button" onClick={reset}>
-            Reset
-          </button>
-        </div>
-      </div>
+      <p>Your WPM: {wpm}</p>
 
+      <div className="stopwatch-container">
+        <p className="stopwatch-time">
+          {seconds.toString().padStart(2, "0")}:
+          {(time % 100).toString().padStart(2, "0")}
+        </p>
+      </div>
       <input
         autoFocus
         type="text"
@@ -170,12 +156,20 @@ function App() {
           );
 
           setCorrectText(correctText);
+          setWpm(Math.round(correctText.length / 5 / (time / 100 / 60) || 0));
+
           setWrongText(wrongText);
           setRemainingText(remainingText);
 
           // Optional: Completion check
           if (value === quote) {
-            alert("🎉 Congratulations! You’ve completed the quote.");
+            const charactersTyped = correctText.length;
+            const wordsTyped = charactersTyped / 5.75;
+            const minutes = time / 100 / 60;
+
+            alert(
+              `🎉 Congratulations! You’ve completed the quote. Your WPM is ${wpm}.`
+            );
             fetchQuote({
               setQuote,
               setBookTitle,
