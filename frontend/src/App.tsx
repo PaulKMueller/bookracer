@@ -7,8 +7,7 @@ async function fetchQuote(setters: {
   setRemainingText: Function;
   setTypedText: Function;
   setCorrectText: Function;
-  setWrongText: Function;
-  setIsLoading: Function;
+  setHighlightedRemainingText: Function;
 }) {
   const {
     setQuote,
@@ -16,11 +15,8 @@ async function fetchQuote(setters: {
     setRemainingText,
     setTypedText,
     setCorrectText,
-    setWrongText,
-    setIsLoading,
+    setHighlightedRemainingText: setHighlightedRemainingText,
   } = setters;
-
-  setIsLoading(true);
 
   try {
     const res = await fetch("http://127.0.0.1:8000/random_quote");
@@ -32,33 +28,41 @@ async function fetchQuote(setters: {
     setRemainingText(cleanText);
     setTypedText("");
     setCorrectText("");
-    setWrongText("");
+    setHighlightedRemainingText("");
   } catch (err) {
     console.error("Failed to fetch quote:", err);
-  } finally {
-    setIsLoading(false);
   }
 }
 
 function checkTypedText(fullText: string, typedText: string) {
   let correctText = "";
-  let wrongText = "";
+  let highlightedRemainingText = "";
+
+  let correctIndex = 0;
+  let wrongIndex = 0;
 
   for (let i = 0; i < typedText.length; i++) {
-    if (fullText[i] === typedText[i]) {
-      correctText += typedText[i];
+    if (typedText[i] === fullText[i]) {
+      correctIndex++;
     } else {
-      wrongText = typedText.slice(i);
       break;
     }
   }
-  const remainingText = fullText.slice(typedText.length);
+
+  wrongIndex = typedText.length;
+
+  correctText = fullText.slice(0, correctIndex);
+  highlightedRemainingText = fullText.slice(correctIndex, wrongIndex);
+  fullText.slice(wrongIndex);
+
+  let remainingText = fullText.slice(wrongIndex, fullText.length);
   return {
     correctText: correctText,
-    wrongText: wrongText,
+    highlightedRemainingText: highlightedRemainingText,
     remainingText,
   };
 }
+
 function replaceWeirdCharacters(text: string) {
   return text
     .replace(/\u2018/g, "'")
@@ -78,8 +82,7 @@ function App() {
   const [bookTitle, setBookTitle] = useState("");
   const [remainingText, setRemainingText] = useState("");
   const [correctText, setCorrectText] = useState("");
-  const [wrongText, setWrongText] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [highlightedRemainingText, setHighlightedRemainingText] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [time, setTime] = useState(0);
   const [wpm, setWpm] = useState(0);
@@ -91,8 +94,7 @@ function App() {
       setRemainingText,
       setTypedText,
       setCorrectText,
-      setWrongText,
-      setIsLoading,
+      setHighlightedRemainingText,
     });
   }, []);
 
@@ -120,15 +122,20 @@ function App() {
   const seconds = Math.floor(time / 100);
 
   return (
-    <main style={{ textAlign: "center", padding: "2rem" }}>
+    <main>
       <h1>📚 Bookracer</h1>
       <h2>{bookTitle}</h2>
-      {/* Show correctly typed part as green, wrong part as red */}
-      <p style={{ fontSize: "1.2rem" }}>
-        <span style={{ color: "green" }}>{correctText}</span>
-        <span style={{ color: "red" }}>{wrongText}</span>
-        <span>{remainingText}</span>
-      </p>
+      <div className="quote-container">
+        <p style={{ fontSize: "1.2rem" }}>
+          <span style={{ color: "#00ff00" }}>{correctText}</span>
+
+          <span style={{ backgroundColor: "red" }}>
+            {highlightedRemainingText}
+          </span>
+          <span className="cursor"></span>
+          <span>{remainingText}</span>
+        </p>
+      </div>
 
       <p>Your WPM: {wpm}</p>
 
@@ -146,27 +153,22 @@ function App() {
         onChange={(e) => {
           const value = e.target.value;
 
-          // Update typedText directly from the input field
           setTypedText(value);
 
-          // Compare current typed text to the quote
-          const { correctText, wrongText, remainingText } = checkTypedText(
-            quote,
-            value
-          );
+          const {
+            correctText,
+            highlightedRemainingText,
+            remainingText,
+          } = checkTypedText(quote, value);
 
           setCorrectText(correctText);
           setWpm(Math.round(correctText.length / 5 / (time / 100 / 60) || 0));
 
-          setWrongText(wrongText);
+          setHighlightedRemainingText(highlightedRemainingText);
           setRemainingText(remainingText);
 
           // Optional: Completion check
           if (value === quote) {
-            const charactersTyped = correctText.length;
-            const wordsTyped = charactersTyped / 5.75;
-            const minutes = time / 100 / 60;
-
             alert(
               `🎉 Congratulations! You’ve completed the quote. Your WPM is ${wpm}.`
             );
@@ -176,8 +178,7 @@ function App() {
               setRemainingText,
               setTypedText,
               setCorrectText,
-              setWrongText,
-              setIsLoading,
+              setHighlightedRemainingText,
             });
           }
         }}
