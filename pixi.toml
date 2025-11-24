@@ -11,7 +11,7 @@ pc = "pre-commit run --all"
 
 [tasks]
 fastapi = "fastapi dev backend/api.py"
-bookracer = "fastapi dev backend/api.py && cd frontend && npm run dev"
+bookracer = { cmd = "sh -c 'fastapi dev backend/api.py & cd frontend && npx vite'", depends_on = [] }
 
 [feature.lint.dependencies]
 pre-commit = ">=4.3.0,<5"
